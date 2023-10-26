@@ -14,7 +14,7 @@ const URL = DRIVER . ':host=' . HOST . ';port=' . PORT . ';dbname=' . DATABASE;
 Flight::register('db', 'PDO', array(URL, USER, PASS));
 
 Flight::route('/', function() {
-    Flight::jsonp(["Api de gestión de pasajes"]);
+    Flight::json(["mensaje" => "Api de gestión de pasajes"]);
 });
 
 Flight::route('GET /pasajes', function () {
