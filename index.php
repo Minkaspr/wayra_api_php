@@ -23,6 +23,10 @@ Flight::route('GET /pasajes', function () {
         $sentencia->setFetchMode(PDO::FETCH_ASSOC);
         $sentencia->execute();
         $datos = $sentencia->fetchAll();
+        // Convertir el precio a un número decimal
+        foreach ($datos as &$dato) {
+            $dato['precio'] = floatval($dato['precio']);
+        }
         Flight::json($datos);
     } catch (PDOException $e) {
         Flight::json(['estado' => 'error', 'mensaje' => $e->getMessage()], 500);
@@ -37,6 +41,7 @@ Flight::route('GET /pasajes/@id', function ($id) {
         $sentencia->execute();
         $datos = $sentencia->fetch();
         if ($datos) {
+            $datos['precio'] = floatval($datos['precio']);
             Flight::json($datos);
         } else {
             Flight::json(['estado' => 'error', 'mensaje' => 'No se encontró el pasaje con el id proporcionado'], 404);
@@ -61,6 +66,22 @@ Flight::route('POST /pasajes', function () {
     $fecha = $request->data->fecha;
     $hora = $request->data->hora;
     $precio = $request->data->precio;
+
+    // Comprobar si todos los campos necesarios están presentes
+    $camposRequeridos = ['primerNom', 'apePaterno', 'apeMaterno', 'numIdentidad', 'origen', 'destino', 'fecha', 'hora', 'precio'];
+    $camposFaltantes = [];
+    foreach ($camposRequeridos as $campo) {
+        if (!isset($request->data->$campo)) {
+            $camposFaltantes[] = $campo;
+        }
+    }
+
+    // Si faltan campos, devolver un error
+    if (!empty($camposFaltantes)) {
+        $mensaje = "Faltan los siguientes campos requeridos: " . implode(", ", $camposFaltantes);
+        Flight::json(['estado' => 'error', 'mensaje' => $mensaje], 400);
+        return;
+    }
 
     // Preparar la sentencia SQL
     $sql = "INSERT INTO pasaje (primerNom, segundoNom, apePaterno, apeMaterno, numIdentidad, telefono, origen, destino, fecha, hora, precio) 
@@ -115,6 +136,22 @@ Flight::route('PUT /pasajes/@id', function ($id) {
     $hora = $request->data->hora;
     $precio = $request->data->precio;
 
+    // Comprobar si todos los campos necesarios están presentes
+    $camposRequeridos = ['primerNom', 'apePaterno', 'apeMaterno', 'numIdentidad', 'origen', 'destino', 'fecha', 'hora', 'precio'];
+    $camposFaltantes = [];
+    foreach ($camposRequeridos as $campo) {
+        if (!isset($request->data->$campo)) {
+            $camposFaltantes[] = $campo;
+        }
+    }
+
+    // Si faltan campos, devolver un error
+    if (!empty($camposFaltantes)) {
+        $mensaje = "Faltan los siguientes campos requeridos: " . implode(", ", $camposFaltantes);
+        Flight::json(['estado' => 'error', 'mensaje' => $mensaje], 400);
+        return;
+    }
+
     // Preparar la sentencia SQL
     $sql = "UPDATE pasaje SET primerNom = ?, segundoNom = ?, apePaterno = ?, apeMaterno = ?, numIdentidad = ?, telefono = ?, origen = ?, destino = ?, 
     fecha = ?, hora = ?, precio = ? WHERE id = ?";
@@ -124,18 +161,26 @@ Flight::route('PUT /pasajes/@id', function ($id) {
         $sentencia = Flight::db()->prepare($sql);
         // Si segundoNom o telefono son NULL, insertamos un NULL en la base de datos
         if ($segundoNom != NULL) {
-            $sentencia->bindParam(1,$segundoNom);
+            $sentencia->bindParam(2,$segundoNom);
         } else {
-            $sentencia->bindValue(1,NULL, PDO::PARAM_NULL);
+            $sentencia->bindValue(2,NULL, PDO::PARAM_NULL);
         }
         if ($telefono != NULL) {
-            $sentencia->bindParam(5,$telefono);
+            $sentencia->bindParam(6,$telefono);
         } else {
-            $sentencia->bindValue(5,NULL, PDO::PARAM_NULL);
+            $sentencia->bindValue(6,NULL, PDO::PARAM_NULL);
         }
-        $sentencia->execute([$primerNom, $segundoNom, $apePaterno, $apeMaterno, $numIdentidad, $telefono, 
-                             $origen, $destino, $fecha, $hora, $precio, $id]);
-
+        $sentencia->bindParam(1,$primerNom);
+        $sentencia->bindParam(3,$apePaterno);
+        $sentencia->bindParam(4,$apeMaterno);
+        $sentencia->bindParam(5,$numIdentidad);
+        $sentencia->bindParam(7,$origen);
+        $sentencia->bindParam(8,$destino);
+        $sentencia->bindParam(9,$fecha);
+        $sentencia->bindParam(10,$hora);
+        $sentencia->bindParam(11,$precio);
+        $sentencia->bindParam(12,$id);
+        $sentencia->execute();
         Flight::json(["estado" => "exito", "mensaje" => "Pasaje modificado"], 200);
     } catch (PDOException $e) {
         Flight::json(['estado' => 'error', 'mensaje' => 'Hubo un error al modificar el pasaje: ' . 
@@ -153,7 +198,12 @@ Flight::route('DELETE /pasajes/@id', function ($id) {
         $sentencia->bindParam(1,$id);
         $sentencia->execute();
 
-        Flight::json(["estado" => "exito", "mensaje" => "Pasaje borrado"], 200);
+        // Comprobar si alguna fila fue afectada
+        if ($sentencia->rowCount() > 0) {
+            Flight::json(["estado" => "exito", "mensaje" => "Pasaje borrado"], 200);
+        } else {
+            Flight::json(['estado' => 'error', 'mensaje' => 'No se encontró un pasaje con el id proporcionado'], 404);
+        }
     } catch (PDOException $e) {
         Flight::json(['estado' => 'error', 'mensaje' => 'Hubo un error al borrar el pasaje: ' . $e->getMessage()], 500);
     }
